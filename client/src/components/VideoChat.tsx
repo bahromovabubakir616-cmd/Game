@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import SimplePeer from 'simple-peer';
-import { Camera, CameraOff, Mic, MicOff, Send, SkipForward, Users, MessageSquare } from 'lucide-react';
+import { Camera, CameraOff, Mic, MicOff, Send, SkipForward, Users, MessageSquare, Activity } from 'lucide-react';
+import EvaluationModal from './EvaluationModal';
 
 const SOCKET_SERVER_URL = 'http://localhost:5001'; // Match with your backend port
 
@@ -20,6 +21,10 @@ export default function VideoChat() {
   
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+
+  const [evaluationStatus, setEvaluationStatus] = useState<'idle' | 'running' | 'completed'>('idle');
+  const [evaluationProgress, setEvaluationProgress] = useState(10);
+  const [evaluationData, setEvaluationData] = useState<any>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -98,6 +103,26 @@ export default function VideoChat() {
       handleNext();
     });
 
+    socket.on('evaluation_started', () => {
+      setEvaluationStatus('running');
+      setEvaluationProgress(10);
+      
+      const interval = setInterval(() => {
+        setEvaluationProgress(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    });
+
+    socket.on('evaluation_result', (data) => {
+      setEvaluationData(data);
+      setEvaluationStatus('completed');
+    });
+
     return () => {
       socket.off('waiting_for_match');
       socket.off('match_found');
@@ -105,6 +130,8 @@ export default function VideoChat() {
       socket.off('answer');
       socket.off('receive_message');
       socket.off('peer_disconnected');
+      socket.off('evaluation_started');
+      socket.off('evaluation_result');
     };
   }, [socket, peer, stream]);
 
@@ -127,7 +154,15 @@ export default function VideoChat() {
       remoteVideoRef.current.srcObject = null;
     }
     setRoomId(null);
+    setEvaluationStatus('idle');
+    setEvaluationData(null);
     findMatch();
+  };
+
+  const startEvaluation = () => {
+    if (socket && roomId && evaluationStatus === 'idle') {
+      socket.emit('start_evaluation', { roomId });
+    }
   };
 
   const sendMessage = (e: React.FormEvent) => {
@@ -184,6 +219,23 @@ export default function VideoChat() {
             </div>
           )}
 
+          {/* Evaluation Overlay */}
+          {evaluationStatus === 'running' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md z-10">
+              <Activity className="w-16 h-16 text-indigo-500 animate-pulse mb-6" />
+              <h3 className="text-2xl font-bold text-white mb-2">Sun'iy Intellekt Kuzatmoqda...</h3>
+              <p className="text-slate-300 mb-8">Suhbatingiz baholanmoqda</p>
+              
+              <div className="w-64 h-3 bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-1000"
+                  style={{ width: `${(evaluationProgress / 10) * 100}%` }}
+                />
+              </div>
+              <p className="mt-4 text-xl font-mono text-indigo-400">{evaluationProgress}s</p>
+            </div>
+          )}
+
           {/* Local Video (PiP) */}
           <div className="absolute bottom-4 right-4 w-32 h-48 sm:w-48 sm:h-64 bg-slate-900 rounded-xl overflow-hidden border-2 border-white/20 shadow-xl z-20">
             <video 
@@ -203,6 +255,12 @@ export default function VideoChat() {
             <button onClick={toggleVideo} className={`p-3 rounded-xl transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-red-500/20 text-red-500 hover:bg-red-500/30'}`}>
               {isVideoEnabled ? <Camera size={20} /> : <CameraOff size={20} />}
             </button>
+            {status === 'connected' && evaluationStatus === 'idle' && (
+              <button onClick={startEvaluation} className="btn-primary flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 border-none shadow-lg shadow-indigo-500/25">
+                <Activity size={20} />
+                <span className="hidden sm:inline">Baholash</span>
+              </button>
+            )}
             <button onClick={handleNext} className="btn-secondary flex items-center gap-2">
               <SkipForward size={20} />
               <span className="hidden sm:inline">Next</span>
@@ -258,6 +316,14 @@ export default function VideoChat() {
           </button>
         </form>
       </div>
+
+      {evaluationStatus === 'completed' && evaluationData && socket && (
+        <EvaluationModal 
+          data={evaluationData} 
+          mySocketId={socket.id} 
+          onClose={() => setEvaluationStatus('idle')} 
+        />
+      )}
     </div>
   );
 }

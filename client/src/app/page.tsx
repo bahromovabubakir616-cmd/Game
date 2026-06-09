@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Video, MessageSquare, Shield, Globe } from 'lucide-react';
+import { Video, MessageSquare, Shield, Globe, Trophy } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -26,6 +26,13 @@ export default function Home() {
           <Link href="/chat?mode=text" className="btn-secondary flex items-center gap-2 text-lg px-8 py-4 w-full sm:w-auto justify-center">
             <MessageSquare size={24} />
             Text Chat
+          </Link>
+        </div>
+
+        <div className="flex justify-center mt-6">
+          <Link href="/leaderboard" className="flex items-center gap-2 text-yellow-500 hover:text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 px-6 py-3 rounded-xl transition-all font-medium border border-yellow-500/20">
+            <Trophy size={20} />
+            Reytingni Ko'rish
           </Link>
         </div>
 
